@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+PROC=$$
+if [[ $1 == '-u' ]] || [[ $1 == "--upload" ]]; then 
+    if IMAGE_TO_UPLOAD=`realpath $2`; then
+        GET_LINK=$(curl -F"file=@$IMAGE_TO_UPLOAD" 0x0.st -fs) && {
+            setsid xdg-open "https://imgops.com/$GET_LINK"
+            exit 0
+        } || {
+            printf "imgops $PROC: Failed to upload to 0x0.st\n"
+            exit 1
+        }
+    else 
+        printf "imgops $PROC: No image\n"
+        exit 1
+    fi
+fi
+
+HACKSAW_REGION=`hacksaw -c FFFFFF`
+IMGOPS_LOOKUP_FILE=/tmp/imgops-lookup.jpg
+shotgun -g $HACKSAW_REGION -f png $IMGOPS_LOOKUP_FILE
+# Notify user of next step
+dunstify -r $PROC "imgops $PROC" "Preparing selected region..."
+
+# Lower the image quality for a faster upload
+magick $IMGOPS_LOOKUP_FILE \
+    -strip -interlace -colorspace RGB JPEG -sampling-factor 4:2:0 -quality 85% -resize 85% $IMGOPS_LOOKUP_FILE
+dunstify -r $PROC "imgops $PROC" "Uploading selected region..."
+
+# Upload to 0x0.st, if successful then open in default browser
+GET_LINK=$(curl -F"file=@$IMGOPS_LOOKUP_FILE" 0x0.st -fs) && {
+    setsid xdg-open "https://imgops.com/$GET_LINK"
+} || {
+    # If image fails to upload
+    dunstify -r $PROC "imgops $PROC" "Failed to upload image to 0x0.st"
+    exit 1
+}
+# On a successful run
+dunstify -r $PROC "imgops $PROC" "Opening in default browser"
+
+# Remove imgops lookup file if exists
+[[ -f $IMGOPS_LOOKUP_FILE ]] && \
+    rm $IMGOPS_LOOKUP_FILE
