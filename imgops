@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
 
 PROC=$$
+IMGOPS_LOOKUP_FILE=/tmp/imgops-lookup.jpg
+
+cleanup() {
+    if [[ -f $IMGOPS_LOOKUP_FILE ]]; then
+        rm $IMGOPS_LOOKUP_FILE
+    fi
+}
+trap "cleanup" EXIT
+
 if [[ $1 == '-u' ]] || [[ $1 == "--upload" ]]; then 
-    if IMAGE_TO_UPLOAD=`realpath $2`; then
-        GET_LINK=$(curl -F"file=@$IMAGE_TO_UPLOAD" 0x0.st -fs) && {
+    if IMAGE_TO_UPLOAD="$(realpath $2)"; then
+        # Lower the image quality for faster upload
+        magick $IMAGE_TO_UPLOAD \
+            -quality 75% -resize 75% $IMGOPS_LOOKUP_FILE
+
+        GET_LINK=$(curl -F"file=@$IMGOPS_LOOKUP_FILE" 0x0.st -fs) && {
             setsid xdg-open "https://imgops.com/$GET_LINK"
-            exit 0
         } || {
             printf "imgops $PROC: Failed to upload to 0x0.st\n"
             exit 1
@@ -14,17 +26,16 @@ if [[ $1 == '-u' ]] || [[ $1 == "--upload" ]]; then
         printf "imgops $PROC: No image\n"
         exit 1
     fi
+    exit 0
 fi
 
 HACKSAW_REGION=`hacksaw -c FFFFFF`
-IMGOPS_LOOKUP_FILE=/tmp/imgops-lookup.jpg
 shotgun -g $HACKSAW_REGION -f png $IMGOPS_LOOKUP_FILE
-# Notify user of next step
 dunstify -r $PROC "imgops $PROC" "Preparing selected region..."
 
 # Lower the image quality for a faster upload
 magick $IMGOPS_LOOKUP_FILE \
-    -strip -interlace -colorspace RGB JPEG -sampling-factor 4:2:0 -quality 85% -resize 85% $IMGOPS_LOOKUP_FILE
+    -strip -interlace -colorspace RGB JPEG -sampling-factor 4:2:0 -quality 75% -resize 75% $IMGOPS_LOOKUP_FILE
 dunstify -r $PROC "imgops $PROC" "Uploading selected region..."
 
 # Upload to 0x0.st, if successful then open in default browser
@@ -37,7 +48,3 @@ GET_LINK=$(curl -F"file=@$IMGOPS_LOOKUP_FILE" 0x0.st -fs) && {
 }
 # On a successful run
 dunstify -r $PROC "imgops $PROC" "Opening in default browser"
-
-# Remove imgops lookup file if exists
-[[ -f $IMGOPS_LOOKUP_FILE ]] && \
-    rm $IMGOPS_LOOKUP_FILE
